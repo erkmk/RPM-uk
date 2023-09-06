@@ -1,6 +1,6 @@
 from datetime import date
 import os
-
+import bcrypt
 import mysql.connector
 import secrets
 from flask import Flask, request, send_file, url_for
@@ -23,6 +23,8 @@ from generate_jwt import jwtToken
 import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import requests
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 # api = Api(app)
@@ -34,7 +36,7 @@ app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
 # app.config['MAIL_USERNAME'] = 'samreshkumarjha21@outlook.com'
-app.config['MAIL_USERNAME'] = 'rapidPMV2@outlook.com'
+app.config['MAIL_USERNAME'] = 'rapidpmv2.0@outlook.com'
 app.config['MAIL_PASSWORD'] = 'Alchemist21@#'
 # app.config['MAIL_TIMEOUT'] = 60
 app.config['SECRET_KEY'] = 'secret'
@@ -43,6 +45,12 @@ mail = Mail(app)
 
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
+NEXTCLOUD_BASE_URL = "https://nextcloud-133613-0.cloudclusters.net/index.php/s/KXPnxgLBWTnaxEk"
+NEXTCLOUD_FOLDER = "RPM FILES"
+UPLOAD_FOLDER = '/home/samresh/Documents/RPM/rpm_web_angular_python/uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 # app.secret_key = b'wellThisIsMySecreteKey'
 # socket.setdefaulttimeout(1)
@@ -63,9 +71,9 @@ users = {}
 # MySQL #######3
 # initializing database connection
 mydb = mysql.connector.connect(
-    host="82.69.10.205",
-    user="musab",
-    password="RAPIDPM",
+    host="localhost",
+    user="root",
+    password="",
     database="RPMnew_dataBase",
     auth_plugin='mysql_native_password'
 )
@@ -505,13 +513,48 @@ def typeBulkAdd():
     typeId = {"message": "successfull"}
     return jsonify(typeId)
 
+def check_url(url):
+    
+    try: 
+        print("MY URL",url)
+        pattern = r'^[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]*$'
+        if re.match(pattern, url):
+            print("UNC Exists")
+            return True
+        elif requests.get(url).status_code == 200:
+            
+            print("URL exists!")
+            return True
+
+        else: 
+            print("URL does not exist!")
+            return False
+    except requests.RequestException: 
+        print("Invalid URL") 
+        return False
+
 
 @app.route('/project', methods=['GET', 'POST'])
 def project():
     project = request.json
-    print(project)
+    print("Project from post>>>>>",project)
+
+    if project['location_url'] == 'N':
+        project['location_url'] = project['custom_location_url']
+        del project['custom_location_url']
+
+    if project['location_url'] != "*RPM":
+        res = check_url(project['location_url'])
+        print("MY response>>>>>",res)
+        if res != True:
+            return jsonify ({"status":False,"message":"Invalid URL"})
+
     projId = project['project_id']
     del project['project_id']
+
+    # if project['custom_location_url']:
+    
+    
     pairs = project.items()
     key = []
     value = []
@@ -523,7 +566,7 @@ def project():
     print(value)
     if (projId == ""):
         sql = "INSERT INTO project (" + ", ".join(key) + \
-            ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+            ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s,%s)"
         try:
             mydb.close()
             mydb.connect()
@@ -546,21 +589,17 @@ def project():
         # mycursor.close()
         # os.mkdir("/home/ubuntu/olddisk/var/www/html/im_Flask/RPM_/artefacts/" +
         #          str(project['company_id']) + '/' + str(projectId["message"]))
-        os.makedirs("/home/samresh/Downloads/RPM_02-06-2023/artefacts/" +
+        os.makedirs("/home/samresh/Documents/RPM/rpm_web_angular_python/artefacts/" +
                     str(project['company_id']) + '/' + str(projectId["message"]), exist_ok=True)
         return jsonify(projectId)
     else:
-        sql = "UPDATE project SET project_name = '" + str(project[
-            'project_name']) + "', template = '" + str(
-            project['template']) + "', status = '" + str(project['status']) + "', owner = '" + str(project['owner']) + "', start = '" + str(project['start']) + "',end = '" + str(project[
-                'end']) + "',hierarchy_id_default = '" + str(
-            project['hierarchy_id_default']) + "' WHERE project_id = '" + str(projId) + "';"
-        # sql = "UPDATE user SET (" + ", ".join(key) + ") VALUES (%s, %s, %s, %s, %s, %s, %s) WHERE user_id = '" + str(custmId) + "';"
+        sql = "UPDATE project SET project_name = %s, template = %s, status = %s, owner = %s, start = %s, end = %s, hierarchy_id_default = %s, location_url = %s WHERE project_id = %s"
+        values = (project['project_name'],project['template'],project['status'],project['owner'],project['start'],project['end'],project['hierarchy_id_default'],project['location_url'],projId)
         try:
             mydb.close()
             mydb.connect()
             mycursor = mydb.cursor()
-            mycursor.execute(sql)
+            mycursor.execute(sql,values)
             mydb.commit()
         except Exception as e:
             print(e)
@@ -795,7 +834,7 @@ def getprojects(company_id):
     # print(row_headers)
     result = [dict(zip(row_headers, res)) for res in result]
     # users = {"message": result};
-    print(result)
+    print("Project --->>>>Company Type",result)
     return jsonify(result)
 
 
@@ -844,8 +883,7 @@ def getCompaniesDetails(companyId):
 
 @ app.route('/getCompaniessList/<userId>', methods=['GET', 'POST'])
 def getCompaniesListDetails(userId):
-    sql = " SELECT * FROM  user_company_role u INNER JOIN  company c on u.company_id = c.company_id where u.user_id ='" + \
-        userId+"' AND c.is_deleted=0 ;"
+    sql = " SELECT u.*, c.*, usr.rpm_admin FROM user_company_role u INNER JOIN company c ON u.company_id = c.company_id INNER JOIN user usr ON u.user_id = usr.user_id WHERE u.user_id = {} AND c.is_deleted = 0;".format(userId)
     mydb.close()
     mydb.connect()
     mycursor = mydb.cursor()
@@ -970,7 +1008,7 @@ def getProject(projectId):
     # print(row_headers)
     result = [dict(zip(row_headers, res)) for res in result]
     # users = {"message": result};
-    print(result)
+    print("Project Output--------->>>>!!!!!!!!!!!!!!!",result)
     return jsonify(result)
 
 
@@ -1080,20 +1118,35 @@ def getArtefacts(projectId):
 
 @ app.route('/getArtefact/<artId>', methods=['GET', 'POST'])
 def getArtefact(artId):
-    sql = "SELECT * FROM  artefact WHERE artefact_id = '" + artId + "';"
 
-    mydb.connect()
-    mycursor = mydb.cursor()
-    mycursor.execute(sql)
-    result = mycursor.fetchall()
-    header = mycursor.description
+    sql_fetch_location = "SELECT p.location_url FROM artefact a JOIN project p ON a.project_id = p.project_id WHERE a.artefact_id = {};".format(98)
+    try:
+        mycursor = mydb.cursor()
+        mycursor.execute(sql_fetch_location)
+        location_url = mycursor.fetchall()[0][0]
+    except Exception as e:
+        print('error is e1', e)
+    
+    
+    sql = "SELECT * FROM  artefact WHERE artefact_id = '" + artId + "';"
+    try:
+        mydb.connect()
+        mycursor = mydb.cursor()
+        mycursor.execute(sql)
+        result = mycursor.fetchall()
+        header = mycursor.description
+    except Exception as e:
+        print('error is e', e)
     # print(header)
     row_headers = [x[0] for x in mycursor.description]
     # mycursor.close()
     # print(row_headers)
     result = [dict(zip(row_headers, res)) for res in result]
     # users = {"message": result};
-    print(result)
+    print("Artefact Result",result)
+    if location_url:
+        result[0]['location_url'] = location_url
+        print("After Modify--->>>>",result)
     return jsonify(result)
 
 
@@ -1573,28 +1626,36 @@ def recursiveTemp(projId, c):
     else:
         return jsn
 
+def sql_fetch(sql):
+    mycursor = mydb.cursor()
+    mycursor.execute(sql)
+    data = mycursor.fetchall()
+    return data
+
 
 @ app.route('/getprojectTree/<projectId>/<heirId>', methods=['GET', 'POST'])
 def getprojectTree(projectId, heirId):
     sql = "SELECT a.*,p.project_name,c.company_name FROM  artefact a LEFT JOIN project p ON p.project_id = a.project_id LEFT JOIN company c ON c.company_id = p.company_id WHERE a.project_id = '" + projectId + \
         "' and a.artefact_id NOT IN (SELECT cal.artefact_id FROM  container_artefact_link cal,  hierarchy_container hc where cal.container_id=hc.container_id and hc.hierarchy_id = '" + heirId + "');"
-
-    mydb.close()
-    mydb.connect()
-    mycursor = mydb.cursor()
-    mycursor.execute(sql)
-    pArtefacts = mycursor.fetchall()
+    
+    # mydb.close()
+    # mydb.connect()
+    # mycursor = mydb.cursor()
+    # mycursor.execute(sql)
+    # pArtefacts = mycursor.fetchall()
+    pArtefacts = sql_fetch(sql)
 
     # mycursor.close()
     sql = "SELECT h.*,p.project_name,c.company_name FROM  hierarchy_container h LEFT JOIN project p ON p.project_id = h.project_id LEFT JOIN company c ON c.company_id = p.company_id WHERE  h.project_id = '" + \
         projectId + "' and h.hierarchy_id = '" + \
         heirId + "' and h.parent_container_id IS NULL;"
 
-    mydb.close()
-    mydb.connect()
-    mycursor = mydb.cursor()
-    mycursor.execute(sql)
-    pcontainers = mycursor.fetchall()
+    # mydb.close()
+    # mydb.connect()
+    # mycursor = mydb.cursor()
+    # mycursor.execute(sql)
+    # pcontainers = mycursor.fetchall()
+    pcontainers = sql_fetch(sql)
 
     # mycursor.close()
     contJson = []
@@ -1613,12 +1674,13 @@ def getprojectTree(projectId, heirId):
         temp["data"] = data
         sql = "SELECT a.*,p.project_name,c.company_name FROM  artefact a LEFT JOIN project p ON p.project_id = a.project_id LEFT JOIN company c ON c.company_id = p.company_id,  container_artefact_link ca  WHERE a.artefact_id = ca.artefact_id and ca.container_id = '" + str(
             pc[0]) + "';"
-        mydb.close()
-        mydb.connect()
-        mycursor = mydb.cursor()
-        mycursor.execute(sql)
-        artefacts = mycursor.fetchall()
+        # mydb.close()
+        # mydb.connect()
+        # mycursor = mydb.cursor()
+        # mycursor.execute(sql)
+        # artefacts = mycursor.fetchall()
         # mycursor.close()
+        artefacts = sql_fetch(sql)
         print("HHHHH>>>>>>>>>>SSSSSS", artefacts)
         for a in artefacts:
             temp2 = {}
@@ -2284,34 +2346,40 @@ def insert_artefact_data():
         description = request.form.get('description')
         status = request.form.get('status')
         location_url = request.form.get('location_url')
-        template_url = request.form.get('template_url')
+        template_url = request.form.get('location_url')
         project_id = request.form.get('project_id')
+        company_id = request.form.get('company_id')
+        doc_id = 1
         template = request.form.get('template')
         container_id = request.form.get('container_id')
-       
+        document_exists = request.form.get('document_exists')
         create_date = date.today()
         update_date = date.today()
+        file = request.files['file']
+        print("hey upload file--->>>>",file)
+        
+
         if location_url == "":
             # sql_staement = "SELECT location_url FROM `artefact_type_default` WHERE project_id = {} and artefact_type = '{}';".format(
             #     project_id, artefact_type)
-            sql_staement = "SELECT location_url FROM `artefact_type_default` WHERE artefact_type = '{}';".format(
-                artefact_type)
+            sql_staement = "SELECT location_url FROM `project` WHERE project_id = '{}';".format(
+                project_id)
             try:
                 mydb.close()
                 mydb.connect()
                 mycursor = mydb.cursor()
                 mycursor.execute(sql_staement)
+                location_url_data = mycursor.fetchall()
             except (mydb.Error, mydb.Warning) as e:
                 print(e)
-            location_url_data = mycursor.fetchall()
             if location_url_data:
                 location_url = location_url_data[0][0]
                 print("location_url", location_url)
             else:
                 location_url = ""
 
-    sql = "INSERT INTO artefact (artefact_type, artefact_owner, artefact_name, description, status, create_date, update_date, location_url, template_url,project_id,template) VALUES ('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}');".format(
-        artefact_type, artefact_owner, artefact_name, description, status, create_date, update_date, location_url, template_url, project_id, template)
+    sql = "INSERT INTO artefact (artefact_type, artefact_owner, artefact_name, description, status, create_date, update_date, location_url, template_url,project_id,template,document_exists) VALUES ('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}','{}');".format(
+        artefact_type, artefact_owner, artefact_name, description, status, create_date, update_date, location_url, template_url, project_id, template,document_exists)
     print(sql)
     try:
         # mydb.close()
@@ -2319,6 +2387,11 @@ def insert_artefact_data():
         mycursor = mydb.cursor()
         mycursor.execute(sql)
         mydb.commit()
+
+        #Upload File Function call to upload the doc into Next Cloud
+        response = upload_file(company_id,project_id,file)
+      
+
         if container_id != "root":
             sql = "SELECT LAST_INSERT_ID()"
             mycursor = mydb.cursor()
@@ -2332,11 +2405,59 @@ def insert_artefact_data():
             mycursor = mydb.cursor()
             mycursor.execute(sql)
             mydb.commit()
-        return jsonify({'status': True})
+        if response == 201:
+            return jsonify({'status': True,'message': 'File uploaded successfully.'})
     except (mydb.Error, mydb.Warning) as e:
         print(e)
-        return jsonify({'status': False})
+        return jsonify({'status': False,'message': 'File upload failed.'})
 
+def upload_file(company_id,project_id,file):
+
+
+    try:
+        sql = "SELECT LAST_INSERT_ID()"
+        mycursor = mydb.cursor()
+        mycursor.execute(sql)
+        artefact_id = {"message": str(
+            mycursor.fetchall()[0]).split('(')[1].split(',')[0]}
+    except Exception as e:
+        print("Error is upload file",e)
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    nextcloud_path = f"/{NEXTCLOUD_FOLDER}/{company_id}/{project_id}/{artefact_id['message']}_{filename}"
+    response = upload_to_nextcloud(
+    filepath, nextcloud_path, "accounts@rapidpm.uk", "Kneller1234!")
+    if response.status_code == 201:
+        return (201)
+    else:
+        return (400)
+
+def upload_to_nextcloud(file_path, nextcloud_path, username, password):
+    base_url = "https://nextcloud-133613-0.cloudclusters.net/remote.php/dav/files/"
+
+    parts = nextcloud_path.split('/')
+    for i in range(2, len(parts)):
+        partial_path = '/'.join(parts[:i])
+        response = requests.request(
+            "MKCOL",
+            f"{base_url}{username}{partial_path}",
+            auth=(username, password),
+            timeout=100
+        )
+        if response.status_code not in (201, 405):
+            print(f"MKCOL {partial_path} returned {response.status_code}")
+
+    with open(file_path, 'rb') as file:
+        response = requests.put(
+            f"{base_url}{username}{nextcloud_path}",
+            data=file,
+            auth=(username, password),
+            timeout=100
+        )
+        print(response.status_code)
+
+    return response
 
 def companyArtefact(project_id):
     
@@ -2465,10 +2586,10 @@ def insertUser():
 
 def send_email(msg,email):
     # Create a message object
-    message = Message('', sender='rapidPMV2@outlook.com', recipients=[email])
+    message = Message('', sender='rapidpmv2.0@outlook.com', recipients=[email])
 
     # Set the content of the message
-    reset_url = f"http://82.69.10.205:4200"
+    reset_url = f"http://127.0.0.1:35557"
     html_content = f'''
             <html>
             <body>
@@ -2480,13 +2601,13 @@ def send_email(msg,email):
         '''
     message = MIMEMultipart("alternative")
     message["Subject"] = "New Company Added"
-    message["From"] = "rapidPMV2@outlook.com"
+    message["From"] = "rapidpmv2.0@outlook.com"
     message["To"] = email
     message.attach(MIMEText(html_content, "html"))
 
     # Send email using smtplib
     smtp_server = 'smtp.office365.com'
-    sender_email = "rapidPMV2@outlook.com"
+    sender_email = "rapidpmv2.0@outlook.com"
     sender_password = "Alchemist21@#"
 
     
@@ -2718,6 +2839,8 @@ def authenticationProcess():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
+        input_password = password.encode('utf-8')
+
     sql = " SELECT email FROM user where email= %s"
     val_email = (email,)
     try:
@@ -2734,17 +2857,18 @@ def authenticationProcess():
             mycursor = mydb.cursor()
             mycursor.execute(sql, val_email)
             password_result_db = mycursor.fetchall()[0][0]
-            print(password_result_db)
+            print('DB Password',password_result_db)
         except Exception as e:
             print("Error is ", e)
-        if password_result_db == password:
+            
+        if bcrypt.checkpw(input_password, password_result_db.encode('utf-8')):
             jwt_string = jwtToken(email, password)
             current_status = 0
             sql = "UPDATE tbl_microsoft_tokens SET current_status = {} WHERE email = '{}';".format(
                 current_status, email)
             # status = 0
             # value = (status,email)
-            print("My first ", sql)
+            # print("My first ", sql)
             try:
                 mycursor = mydb.cursor()
                 mycursor.execute(sql)
@@ -2811,14 +2935,18 @@ def authenticationProcess():
         except Exception as e:
             print("Error in query 3.1", e)
 
-# Create account page
 
+
+# Create account page
 
 @app.route("/signin", methods=['POST'])
 def loginAccount():
+    print("Inside LoginAccount")
     if request.method == 'POST' and 'email' in request.form and 'password' in request.form:
         email = request.form.get('email')
         password = request.form.get('password')
+        input_password = password.encode('utf-8')
+        print("Input_password",input_password)
     sql = " SELECT * FROM user where email= %s"
     print(sql)
     val_email = (email,)
@@ -2831,8 +2959,8 @@ def loginAccount():
         print("Error in createAccount", e)
     db_password = result[2]
     if db_password:
-        # proceed with authentication process
-        if db_password == password:
+        # proceed with authentication process if bcrypt.checkpw(input_password, db_password):
+        if bcrypt.checkpw(input_password, db_password):
             # set session variables and redirect to dashboard
             # authenticationProcess(email, password)
             print("Inside db_password")
@@ -2855,6 +2983,12 @@ def loginAccount():
         return jsonify({'msg': error})
     return jsonify({'msg': "successfull Login"})
 
+
+def encrypt_password(password):
+    
+    salt = bcrypt.gensalt()  
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed_password
 
 @app.route('/create_account', methods=['GET', 'POST'])
 def create_account():
@@ -2898,11 +3032,11 @@ def create_account():
                         print("token:", token)
                         # subject = "Account Verification - Rapid PM"
                         msg = Message("Account Verification - Rapid PM",
-                                      sender='rapidPMV2@outlook.com', recipients=[email])
+                                      sender='rapidpmv2.0@outlook.com', recipients=[email])
                         # print("msg is --->>> ",msg)
                         # link = url_for(
                         #     'http://localhost:35557/app-email-verify-screen/', token=token, _external=True)
-                        link = 'http://82.69.10.205:4200/app-email-verify-screen/'+token
+                        link = 'http://localhost:35557/app-email-verify-screen/'+token
                         # link = BASE_URL + '/confirm/' + token
                         print("link is --->>> ", link)
                         msg.body = """
@@ -2946,10 +3080,10 @@ def create_account():
                     print("token:", token)
                     # subject = "Account Verification - Rapid PM"
                     msg = Message("Account Verification - Rapid PM",
-                                  sender='rapidPMV2@outlook.com', recipients=[email])
+                                  sender='rapidpmv2.0@outlook.com', recipients=[email])
                     # print("msg is --->>> ",msg)
                     # link = url_for('http://localhost:35557/app-email-verify-screen/', token=token, _external=True)
-                    link = 'http://82.69.10.205:4200/app-email-verify-screen/'+token
+                    link = 'http://localhost:35557/app-email-verify-screen/'+token
                     # link = BASE_URL + '/confirm/' + token
                     print("link is --->>> ", link)
                     msg.body = """
@@ -2968,10 +3102,11 @@ def create_account():
                     print(" message body is --->>> ", msg.body)
                     mail.send(msg)
                     print(" After mail send--->>> ")
+                    enc_password = encrypt_password(password)
                     sql = "INSERT INTO user (email,password,status,verified,firstLogin,token) VALUES (%s, %s, %s, %s, %s,%s)"
                     print(sql)
-                    print(email, password, "Pending", "N", "N", token)
-                    val_user = (email, password, "Pending", "N", "N", token)
+                    print(email, enc_password, "Pending", "N", "N", token)
+                    val_user = (email, enc_password, "Pending", "N", "N", token)
                     try:
                         mycursor = mydb.cursor()
                         mycursor.execute(sql, val_user)
@@ -3196,7 +3331,7 @@ def generate_password_reset_token(user_id):
 
 def send_password_reset_email(email, token,flag,msg):
     # Construct the reset password URL using the token
-    reset_url = f"http://82.69.10.205:4200/app-reset-password-update/{token}"
+    reset_url = f"http://127.0.0.1:35557/app-reset-password-update/{token}"
     # reset_url = url_for('Reset', token=token, _external=True)
     if flag:
         html_content = f'''
@@ -3220,13 +3355,13 @@ def send_password_reset_email(email, token,flag,msg):
     # Create the email message
     message = MIMEMultipart("alternative")
     message["Subject"] = "Password Reset"
-    message["From"] = "rapidPMV2@outlook.com"
+    message["From"] = "rapidpmv2.0@outlook.com"
     message["To"] = email
     message.attach(MIMEText(html_content, "html"))
 
     # Send email using smtplib
     smtp_server = 'smtp.office365.com'
-    sender_email = "rapidPMV2@outlook.com"
+    sender_email = "rapidpmv2.0@outlook.com"
     sender_password = "Alchemist21@#"
 
     
@@ -3246,7 +3381,6 @@ def send_password_reset_email(email, token,flag,msg):
         return False
 
 # API endpoint to initiate password reset
-
 
 @app.route('/reset-password', methods=['POST'])
 def reset_password_request():
@@ -3276,6 +3410,8 @@ def reset_password_request():
     token = generate_password_reset_token(user_id)
 
     # Send password reset email to the user
+    flag=0
+    msg=''
     status = send_password_reset_email(email, token,flag,msg)
     if status:
         return jsonify({"status": True, "msg": "Password reset instructions sent to your email."})
@@ -3318,11 +3454,12 @@ def reset_password(token):
         return jsonify({"status": False, "msg": "Invalid or expired token."})
 
     # Update the user's password in the database
-    new_password = request.form.get("new_password")
+    password = request.form.get("new_password")
+    new_password = encrypt_password(password)
     if not new_password:
         return jsonify({"msg": "New password is required.", 'status': False})
 
-    if not re.match(r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', new_password):
+    if not re.match(r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', password):
         error = 'Your password must meet the following requirements: 8 characters in length, at least one uppercase letter, one lowercase letter, one numeric digit, one special character, and no white spaces.'
         return jsonify({"msg": error, 'status': False})
 
