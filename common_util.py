@@ -1,4 +1,5 @@
-
+import requests
+import json
 
 
 def checkLogin(userEmail, userPassword):
@@ -42,3 +43,24 @@ def checkLogin(userEmail, userPassword):
         json_data["authorized"] = "False"
         json_data["message"] = ["Email address not found"]
     return (json.dumps(json_data), json_data)
+
+
+def check_url(url):
+    
+    try: 
+        print("MY URL",url)
+        pattern = r'^[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]*$'
+        if re.match(pattern, url):
+            print("UNC Exists")
+            return True
+        elif requests.get(url).status_code == 200:
+            
+            print("URL exists!")
+            return True
+
+        else: 
+            print("URL does not exist!")
+            return False
+    except requests.RequestException: 
+        print("Invalid URL") 
+        return False
