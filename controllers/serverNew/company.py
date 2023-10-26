@@ -4,6 +4,26 @@ from flask_jsonpify import jsonify
 
 
 class Company(ClientAccess):
+    def get(self, companyId):
+        sql = "SELECT c.*,u.user_id,u.email,u.name FROM  company c LEFT JOIN user u ON u.company_id = c.company_id WHERE c.company_id = '" + \
+            companyId + "'"
+
+        mydb.close()
+        mydb.connect()
+        mycursor = mydb.cursor()
+        mycursor.execute(sql)
+        result = mycursor.fetchall()
+        header = mycursor.description
+        # print(header)
+        row_headers = [x[0] for x in mycursor.description]
+        # mycursor.close()
+        # print(row_headers)
+        result = [dict(zip(row_headers, res)) for res in result]
+        # users = {"message": result};
+        print(result)
+        return jsonify(result)
+
+
     def post(self,):
         company = request.json
         print(company)

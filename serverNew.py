@@ -1095,6 +1095,7 @@ def getTokenDataDetails(tokenId):
     print(result)
     return jsonify(result)
 
+#Khalid 1096
 
 @ app.route('/getArtefacts/<projectId>', methods=['GET', 'POST'])
 def getArtefacts(projectId):
