@@ -1,3 +1,19 @@
+from controllers.serverNew.addContainer import AddContainer
+from controllers.serverNew.deleteCompanyArtefactType import DeleteCompanyArtefactType
+from controllers.serverNew.deleteProjectArtefactTypeDefaults import DeleteProjectArtefactTypeDefaults
+from controllers.serverNew.getCompanyArtefact import GetCompanyArtefact
+from controllers.serverNew.getCompanyArtefactTypeDefault import GetCompanyArtefactTypeDefault
+from controllers.serverNew.getContainer import GetContainer
+from controllers.serverNew.getHeirarchyList import GetHeirarchyList
+from controllers.serverNew.getHeirarchyListData import GetHeirarchyListData
+from controllers.serverNew.getMyData import GetMyData
+from controllers.serverNew.insertCompanyArtefactType import InsertCompanyArtefactType
+from controllers.serverNew.insertProjectArtefactTypeDefaults import InsertProjectArtefactTypeDefaults
+from controllers.serverNew.listCompanyArtefactType import ListCompanyArtefactType
+from controllers.serverNew.listProjectArtefactTypeDefaults import ListProjectArtefactTypeDefaults
+from controllers.serverNew.updateCompanyArtefactType import UpdateCompanyArtefactType
+from controllers.serverNew.updateContainer import UpdateContainer
+from controllers.serverNew.updateProjectArtefactTypeDefaults import UpdateProjectArtefactTypeDefaults
 from flask import Blueprint
 from controllers.serverNew.addHeirarchy import AddHeirarchy
 from controllers.serverNew.admin import Admin
@@ -57,6 +73,20 @@ api.add_resource(TokenDataVrify, "/verifyTokenData")
 api.add_resource(TokenDataDetails, "/getTokenDataDetails/<tokenId>")
 api.add_resource(GetArtefacts, "/getArtefacts/<projectId>")
 api.add_resource(GetArtefact, "/getArtefact/<artId>")
-
-
+api.add_resource(GetContainer, "/getContainer/<contId>")
+api.add_resource(UpdateContainer,'/updateContainer/<contTitle>/<contId>')
+api.add_resource(AddContainer,'/addContainer/<containerName>/<root>/<projId>/<herId>')
+api.add_resource(GetHeirarchyList,'/getHeirarchyList/<project_id>')
+api.add_resource(GetHeirarchyListData,'/getHeirarchyList')
+api.add_resource(ListCompanyArtefactType,'/list_company_artefact_types/<company_id>')
+api.add_resource(InsertCompanyArtefactType,'/insert_company_artefact_types/<company_id>')
+api.add_resource(UpdateCompanyArtefactType,'/update_company_artefact_types')
+api.add_resource(DeleteCompanyArtefactType,'/delete_company_artefact_types/<row_id>')
+api.add_resource(ListProjectArtefactTypeDefaults,'/list_project_artefact_type_defaults/<project_id>')
+api.add_resource(InsertProjectArtefactTypeDefaults,'/insert_project_artefact_type_defaults/<project_id>')
+api.add_resource(UpdateProjectArtefactTypeDefaults,'/update_project_artefact_type_defaults')
+api.add_resource(DeleteProjectArtefactTypeDefaults,'/delete_project_artefact_types/<id_>')
+api.add_resource(GetCompanyArtefact,'/get_company_artefact/<company_id>')
+api.add_resource(GetCompanyArtefactTypeDefault,'/get_company_artefact_type_default/<project_id>')
+api.add_resource(GetMyData,'/get_my_data/<company_id>')
 
